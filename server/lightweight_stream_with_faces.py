@@ -211,7 +211,7 @@ def main():
                             frame = capture_frame_for_detection(picam2)
                             if frame is not None:
                                 faces = face_detector.detect_faces(frame)
-                                if faces:
+                                if len(faces) > 0:
                                     # Optional: Log face detection events
                                     timestamp = time.strftime("%H:%M:%S")
                                     print(f"\n[{timestamp}] Found {len(faces)} face(s)")

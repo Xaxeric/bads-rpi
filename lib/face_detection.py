@@ -44,11 +44,13 @@ class FaceDetector:
             "/usr/local/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
             "haarcascades/haarcascade_frontalface_default.xml",
         ]
-        
+
         # Try to add cv2.data.haarcascades path if it exists
         try:
-            if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
-                cascade_paths.insert(0, cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+            if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+                cascade_paths.insert(
+                    0, cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+                )
         except AttributeError:
             pass  # cv2.data not available, skip this path
 
@@ -63,8 +65,12 @@ class FaceDetector:
 
         print("✗ Could not load face cascade classifier!")
         print("Try downloading manually:")
-        print("sudo wget -O /usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml \\")
-        print("  https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml")
+        print(
+            "sudo wget -O /usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml \\"
+        )
+        print(
+            "  https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
+        )
         self.face_cascade = None
         return False
 
@@ -176,7 +182,7 @@ class FaceDetector:
         if faces is None:
             faces = self.faces_detected
 
-        if not faces:
+        if len(faces) == 0:
             return frame
 
         # Draw rectangles around faces
