@@ -12,7 +12,7 @@ import os
 import cv2
 import numpy as np
 from picamera2 import Picamera2
-from picamera2.encoders import MJPEGEncoder  # Changed to MJPEG for overlay support
+from picamera2.encoders import JpegEncoder  # Changed to MJPEG for overlay support
 from picamera2.outputs import FileOutput
 
 # Add lib directory to path
@@ -170,7 +170,7 @@ def main():
     picam2 = create_overlay_camera()
 
     # Use MJPEG encoder (supports frame processing)
-    encoder = MJPEGEncoder(q=50)  # Quality 50 for smaller files
+    encoder = JpegEncoder(q=50)  # Quality 50 for smaller files
 
     # Initialize face detector if enabled
     face_detector = None
