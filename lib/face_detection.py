@@ -40,9 +40,17 @@ class FaceDetector:
         cascade_paths = [
             "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
             "/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml",
+            "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
+            "/usr/local/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
             "haarcascades/haarcascade_frontalface_default.xml",
         ]
+        
+        # Try to add cv2.data.haarcascades path if it exists
+        try:
+            if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
+                cascade_paths.insert(0, cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        except AttributeError:
+            pass  # cv2.data not available, skip this path
 
         for path in cascade_paths:
             try:
@@ -54,7 +62,9 @@ class FaceDetector:
                 continue
 
         print("✗ Could not load face cascade classifier!")
-        print("Install with: sudo apt install python3-opencv")
+        print("Try downloading manually:")
+        print("sudo wget -O /usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml \\")
+        print("  https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml")
         self.face_cascade = None
         return False
 

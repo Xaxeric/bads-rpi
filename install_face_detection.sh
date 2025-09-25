@@ -9,11 +9,11 @@ sudo apt update
 
 # Install OpenCV and dependencies
 echo "Installing OpenCV..."
-sudo apt install -y python3-opencv python3-pip
+sudo apt install -y python3-pip
+sudo apt install -y python3-opencv
+sudo apt install -y python3-numpy
+sudo apt install -y opencv-data
 
-# Install additional Python packages
-echo "Installing Python packages..."
-pip3 install --user opencv-python-headless numpy
 
 # Download Haar cascades if needed
 CASCADES_DIR="/usr/share/opencv4/haarcascades"
