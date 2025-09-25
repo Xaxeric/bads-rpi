@@ -1,3 +1,4 @@
 tmp/*
 tmp/
 temp_stream.h264
+received_mjpeg_*
