@@ -1,12 +1,17 @@
-# Raspberry Pi Video Streaming
+# Raspberry Pi Video Streaming & Image Capture
 
-This project contains a video streaming server for Raspberry Pi and client applications to receive the stream.
+This project contains video streaming and image capture applications for Raspberry Pi with various client options.
 
 ## Files
 
-- `capture_stream.py` - Server running on Raspberry Pi
+### Video Streaming
+- `capture_stream.py` - Video streaming server for Raspberry Pi
 - `stream_client.py` - Simple client to receive and save video
 - `realtime_client.py` - Real-time client with threading support
+
+### Image Capture API
+- `capture_api_client.py` - Captures images every 500ms and sends to REST API
+- `test_api.py` - Test script to verify API endpoint functionality
 
 ## Setup
 
@@ -14,11 +19,19 @@ This project contains a video streaming server for Raspberry Pi and client appli
 1. Make sure you have a Raspberry Pi with camera module
 2. Install required packages:
    ```bash
-   pip3 install picamera2
+   pip3 install picamera2 requests pillow numpy
    ```
-3. Run the server:
+
+### Video Streaming
+3. Run the video streaming server:
    ```bash
    python3 capture_stream.py
+   ```
+
+### Image Capture API
+3. Run the image capture client:
+   ```bash
+   python3 capture_api_client.py
    ```
 
 ### Client (Any computer)
@@ -26,6 +39,36 @@ This project contains a video streaming server for Raspberry Pi and client appli
 2. Find your Raspberry Pi's IP address (use `hostname -I` on the Pi)
 
 ## Usage
+
+### Image Capture API (`capture_api_client.py`)
+Captures images every 500ms and sends them to a REST API server:
+
+```bash
+# Default usage (sends to 192.168.18.11:3000/api/capture every 500ms)
+python3 capture_api_client.py
+
+# Custom API URL
+python3 capture_api_client.py http://localhost:3000/api/capture
+
+# Custom interval (1 second between captures)
+python3 capture_api_client.py http://192.168.18.11:3000/api/capture 1.0
+
+# Run for limited time (30 seconds)
+python3 capture_api_client.py http://192.168.18.11:3000/api/capture 0.5 30
+```
+
+### Test API Endpoint (`test_api.py`)
+Test if your API server is working properly:
+
+```bash
+# Test default endpoint
+python3 test_api.py
+
+# Test custom endpoint
+python3 test_api.py http://localhost:3000/api/capture
+```
+
+### Video Streaming
 
 ### Simple Client (`stream_client.py`)
 Receives the entire 20-second video stream and saves it to a file:
