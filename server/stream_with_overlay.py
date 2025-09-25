@@ -9,18 +9,18 @@ import time
 import gc
 import sys
 import os
-import cv2
-import numpy as np
-from picamera2 import Picamera2
-from picamera2.encoders import JpegEncoder  # Changed to MJPEG for overlay support
-from picamera2.outputs import FileOutput
+import cv2 # pyright: ignore[reportMissingImports]
+import numpy as np  # noqa: F401
+from picamera2 import Picamera2 # pyright: ignore[reportMissingImports]
+from picamera2.encoders import JpegEncoder  # pyright: ignore[reportMissingImports] # Changed to MJPEG for overlay support
+from picamera2.outputs import FileOutput # pyright: ignore[reportMissingImports]
 
 # Add lib directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 # Try to import face detection (optional)
 try:
-    from face_detection import create_face_detector
+    from face_detection import create_face_detector # pyright: ignore[reportMissingImports]
 
     FACE_DETECTION_AVAILABLE = True
 except ImportError as e:
@@ -43,7 +43,7 @@ class OverlayOutput(FileOutput):
             # Convert from YUV420 to RGB if needed
             if len(frame.shape) == 1:  # YUV420 format
                 height = int(len(frame) * 2 / 3)
-                width = int(height * 4 / 3)
+                width = int(height * 4 / 3)  # noqa: F841
                 # Skip YUV conversion for now, too complex for Pi Zero
                 return super().outputframe(frame, keyframe)
 

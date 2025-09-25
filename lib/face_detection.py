@@ -4,7 +4,7 @@ Face Detection Library for Raspberry Pi streaming
 Lightweight OpenCV-based face detection with memory optimization
 """
 
-import cv2
+import cv2 # pyright: ignore[reportMissingImports]
 import time
 
 

@@ -7,10 +7,10 @@ Minimal memory footprint version
 import socket
 import time
 import gc
-import os
-from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder
-from picamera2.outputs import FileOutput
+import os  # noqa: F401
+from picamera2 import Picamera2 # pyright: ignore[reportMissingImports]
+from picamera2.encoders import H264Encoder # pyright: ignore[reportMissingImports]
+from picamera2.outputs import FileOutput # pyright: ignore[reportMissingImports]
 
 
 def optimize_system():

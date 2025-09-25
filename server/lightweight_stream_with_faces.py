@@ -9,17 +9,17 @@ import time
 import gc
 import sys
 import os
-from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder
-from picamera2.outputs import FileOutput
+from picamera2 import Picamera2 # pyright: ignore[reportMissingImports]
+from picamera2.encoders import H264Encoder # pyright: ignore[reportMissingImports]
+from picamera2.outputs import FileOutput # pyright: ignore[reportMissingImports]
 
 # Add lib directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 # Try to import face detection (optional)
 try:
-    from face_detection import create_face_detector
-    import cv2
+    from face_detection import create_face_detector # pyright: ignore[reportMissingImports]
+    import cv2 # pyright: ignore[reportMissingImports]
 
     FACE_DETECTION_AVAILABLE = True
 except ImportError as e:
