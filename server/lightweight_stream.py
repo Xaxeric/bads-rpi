@@ -30,7 +30,7 @@ def create_minimal_camera():
 
     # Minimal configuration for Pi Zero 2 W
     video_config = picam2.create_video_configuration(
-        main={"size": (240, 320)},  # Very small resolution
+        main={"size": (320, 240)},  # Very small resolution
         buffer_count=2,  # Minimal buffers
         queue=False,  # No queue
         controls={
