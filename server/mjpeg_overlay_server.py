@@ -38,7 +38,7 @@ class MJPEGStreamWithOverlay:
         self.detection_interval = 1.0  # Detect faces every 1 second
 
     def process_frame_with_faces(self, frame):
-        """Add face detection boxes to frame"""
+        """Add face detection boxes to frame (single face only)"""
         current_time = time.time()
 
         # Run face detection periodically
@@ -51,57 +51,55 @@ class MJPEGStreamWithOverlay:
                 if len(frame.shape) == 3 and frame.shape[2] == 3:
                     bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                    # Detect faces
+                    # Detect faces - limit to 1 face for performance
                     faces = self.face_detector.detect_faces(bgr_frame)
-                    self.detected_faces = faces
-                    self.last_detection_time = current_time
 
-                    print(f"Face detection result: {len(faces)} faces found")  # Debug
+                    # Only keep the largest face (closest to camera)
                     if len(faces) > 0:
-                        print(f"Face coordinates: {faces}")  # Debug
-                        print(f"Overlay: Found {len(faces)} face(s)")
+                        # Find largest face by area
+                        largest_face = max(faces, key=lambda face: face[2] * face[3])
+                        self.detected_faces = [largest_face]  # Only keep one face
+                        print("Face detected: 1 face (largest)")
+                        print(f"Face coordinates: {largest_face}")
+                    else:
+                        self.detected_faces = []
+                        print("No faces detected")
+
+                    self.last_detection_time = current_time
 
             except Exception as e:
                 print(f"Face detection error: {e}")
 
-        # Always show if we have cached faces
+        # Draw face box if we have one
         if len(self.detected_faces) > 0:
-            print(
-                f"Drawing overlay with {len(self.detected_faces)} cached faces"
-            )  # Debug
             frame = self.draw_face_boxes(frame)
-        else:
-            print("No faces to draw")  # Debug
 
         return frame
 
     def draw_face_boxes(self, frame):
-        """Draw green rectangles around detected faces"""
+        """Draw white rectangle around detected face (single face only) - optimized for grayscale"""
         try:
             # Make a copy to avoid modifying original
             overlay_frame = frame.copy()
 
-            print(f"Drawing {len(self.detected_faces)} face boxes")  # Debug
-
+            # Should only have 1 face now
             for x, y, w, h in self.detected_faces:
-                print(f"Drawing box at: x={x}, y={y}, w={w}, h={h}")  # Debug
-
-                # Draw green rectangle (thicker for visibility)
-                cv2.rectangle(overlay_frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
+                # Draw white rectangle (visible on grayscale)
+                cv2.rectangle(overlay_frame, (x, y), (x + w, y + h), (255, 255, 255), 3)
 
                 # Draw a second rectangle inside for better visibility
                 cv2.rectangle(
                     overlay_frame,
                     (x + 2, y + 2),
                     (x + w - 2, y + h - 2),
-                    (0, 255, 0),
+                    (255, 255, 255),
                     1,
                 )
 
-                # Add "FACE" label with background
+                # Add "FACE" label with background (white on black for grayscale)
                 cv2.rectangle(
-                    overlay_frame, (x, y - 30), (x + 60, y), (0, 255, 0), -1
-                )  # Background
+                    overlay_frame, (x, y - 30), (x + 60, y), (255, 255, 255), -1
+                )  # White background
                 cv2.putText(
                     overlay_frame,
                     "FACE",
@@ -110,20 +108,7 @@ class MJPEGStreamWithOverlay:
                     0.6,
                     (0, 0, 0),
                     2,
-                )  # Black text on green
-
-                # Add face number for multiple faces
-                if len(self.detected_faces) > 1:
-                    face_num = list(self.detected_faces).index((x, y, w, h)) + 1
-                    cv2.putText(
-                        overlay_frame,
-                        f"#{face_num}",
-                        (x + w - 30, y + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 255, 0),
-                        2,
-                    )
+                )  # Black text on white
 
             return overlay_frame
 
@@ -178,7 +163,9 @@ def get_memory_info():
 
 def main():
     print("=== MJPEG Server with Face Detection Overlay ===")
-    print("Resolution: 480x360 RGB, Face boxes drawn on frames")
+    print(
+        "Resolution: 480x360, Single face detection, Grayscale output for performance"
+    )
 
     # Parse command line arguments
     face_detection_enabled = False
@@ -262,17 +249,23 @@ def main():
                         if face_detection_enabled:
                             frame = streamer.process_frame_with_faces(frame)
 
-                        # Add a test rectangle to verify drawing works
+                        # Convert to grayscale for better performance (after face detection)
+                        if len(frame.shape) == 3:  # If color frame
+                            gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+                            # Convert back to 3-channel for JPEG encoding but keep grayscale appearance
+                            frame = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)
+
+                        # Add a test rectangle to verify drawing works (now in grayscale world)
                         cv2.rectangle(
-                            frame, (10, 10), (100, 50), (255, 0, 0), 2
-                        )  # Blue test rectangle
+                            frame, (10, 10), (100, 50), (128, 128, 128), 2
+                        )  # Gray test rectangle
                         cv2.putText(
                             frame,
                             "TEST",
                             (15, 35),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
-                            (255, 0, 0),
+                            (128, 128, 128),
                             2,
                         )
 
