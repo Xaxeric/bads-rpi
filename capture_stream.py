@@ -20,11 +20,24 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
     picam2.encoders = encoder
 
     conn, addr = sock.accept()
-    stream = conn.makefile("wb")
-    encoder.output = FileOutput(stream)
-    picam2.start_encoder(encoder)
-    picam2.start()
-    time.sleep(20)
-    picam2.stop()
-    picam2.stop_encoder()
-    conn.close()
+    print(f"Client connected from {addr}")
+    
+    try:
+        stream = conn.makefile("wb")
+        encoder.output = FileOutput(stream)
+        picam2.start_encoder(encoder)
+        picam2.start()
+        
+        print("Streaming started. Press Ctrl+C to stop...")
+        
+        # Stream forever until keyboard interrupt
+        while True:
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\nStopping stream...")
+    finally:
+        picam2.stop()
+        picam2.stop_encoder()
+        conn.close()
+        print("Stream stopped.")
