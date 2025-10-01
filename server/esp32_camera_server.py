@@ -134,8 +134,9 @@ def handle_esp32_client(conn, addr, camera_server, picam2):
                 # Decode and clean the command
                 command = data.decode("utf-8").strip()
                 print(f"ESP32 command: '{command}' (raw bytes: {data})")
+                print(f"Command length: {len(command)}, repr: {repr(command)}")
 
-                if command == "GET_FRAME":
+                if command.startswith("GET_FRAME"):
                     try:
                         # Capture frame
                         frame = picam2.capture_array()
