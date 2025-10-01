@@ -325,12 +325,12 @@ def get_frame_compressed():
 
 @app.route("/stream")
 def mjpeg_stream():
-    """MJPEG stream - for browsers or advanced ESP32 implementations"""
+    """MJPEG grayscale stream - for browsers or advanced ESP32 implementations"""
 
     def generate():
         while True:
             try:
-                jpeg_data = camera_server.capture_jpeg()
+                jpeg_data = camera_server.capture_grayscale_jpeg()
                 if jpeg_data:
                     yield (
                         b"--frame\r\n"
@@ -381,40 +381,23 @@ def main():
     print("Resolution: 320x240 JPEG")
     print("ESP32 endpoint: http://your-pi-ip:5000/frame")
 
-    # Parse arguments
-    face_detection = False
-    grayscale_processing = False
-    advanced_compression = False
+    # Default port
     port = 5000
 
+    # Parse port argument if provided
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
-            if arg in ["--face-detection", "-f"]:
-                face_detection = True
-            elif arg in ["--grayscale", "-g"]:
-                grayscale_processing = True
-            elif arg in ["--compression", "-c"]:
-                advanced_compression = True
-            elif arg in ["--all", "-a"]:
-                face_detection = True
-                grayscale_processing = True
-                advanced_compression = True
-            elif arg.startswith("--port="):
+            if arg.startswith("--port="):
                 port = int(arg.split("=")[1])
 
     try:
         # Initialize camera
         camera_server.initialize_camera()
 
-        # Enable features if requested
-        if face_detection:
-            camera_server.enable_face_detection()
-
-        if grayscale_processing:
-            camera_server.enable_grayscale()
-
-        if advanced_compression:
-            camera_server.enable_compression()
+        # Enable all features by default
+        camera_server.enable_face_detection()
+        camera_server.enable_grayscale()
+        camera_server.enable_compression()
 
         print(f"Starting server on port {port}...")
         print(
@@ -430,14 +413,8 @@ def main():
         print(f"  Single frame (ESP32):     http://0.0.0.0:{port}/frame")
         print(f"  Grayscale frame (ESP32):  http://0.0.0.0:{port}/frame_gray")
         print(f"  Compressed frame (ESP32): http://0.0.0.0:{port}/frame_compressed")
-        print(f"  MJPEG stream:             http://0.0.0.0:{port}/stream")
+        print(f"  MJPEG grayscale stream:   http://0.0.0.0:{port}/stream")
         print(f"  Server info:              http://0.0.0.0:{port}/info")
-        print("\nArguments:")
-        print("  --face-detection, -f:  Enable face detection")
-        print("  --grayscale, -g:       Enable grayscale processing")
-        print("  --compression, -c:     Enable advanced compression")
-        print("  --all, -a:             Enable all features")
-        print("  --port=5000:           Set server port")
 
         # Force garbage collection
         gc.collect()
