@@ -37,23 +37,34 @@ class ESP32CameraServer:
     def create_bw_bitmap(self, frame):
         """Convert frame to 1-bit bitmap as ESP32 expects"""
         try:
+            print(f"Processing frame: {frame.shape}")
+
             # Run face detection first
             current_time = time.time()
             if (
                 self.face_detector
                 and (current_time - self.last_detection_time) > self.detection_interval
             ):
-                faces = self.face_detector.detect_faces(frame)
+                print("Running face detection...")
+                # Convert RGB to BGR for face detection
+                if len(frame.shape) == 3:
+                    bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    faces = self.face_detector.detect_faces(bgr_frame)
+                else:
+                    faces = self.face_detector.detect_faces(frame)
+
                 if len(faces) > 0:
                     largest_face = max(faces, key=lambda face: face[2] * face[3])
                     self.detected_faces = [largest_face]
-                    print("Face detected for ESP32")
+                    print(f"Face detected for ESP32: {largest_face}")
                 else:
                     self.detected_faces = []
+                    print("No faces detected")
                 self.last_detection_time = current_time
 
             # Draw face boxes
             if len(self.detected_faces) > 0:
+                print(f"Drawing {len(self.detected_faces)} face boxes")
                 for x, y, w, h in self.detected_faces:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 255), 2)
                     cv2.putText(
@@ -81,10 +92,16 @@ class ESP32CameraServer:
             # Pack into 1-bit format
             bitmap = np.packbits(bw // 255, axis=1)
 
-            return bitmap.tobytes()
+            bitmap_bytes = bitmap.tobytes()
+            print(f"Created bitmap: {len(bitmap_bytes)} bytes for 240x320 display")
+
+            return bitmap_bytes
 
         except Exception as e:
             print(f"Bitmap creation error: {e}")
+            import traceback
+
+            traceback.print_exc()
             # Return empty bitmap of correct size
             return b"\x00" * (240 * 320 // 8)
 
@@ -109,40 +126,51 @@ def handle_esp32_client(conn, addr, camera_server, picam2):
     try:
         while True:
             # Read command from ESP32
-            data = conn.recv(1024).decode("utf-8").strip()
+            try:
+                data = conn.recv(1024)
+                if not data:
+                    break
 
-            if not data:
-                break
+                # Decode and clean the command
+                command = data.decode("utf-8").strip()
+                print(f"ESP32 command: '{command}' (raw bytes: {data})")
 
-            print(f"ESP32 command: '{data}'")
+                if command == "GET_FRAME":
+                    try:
+                        # Capture frame
+                        frame = picam2.capture_array()
 
-            if data == "GET_FRAME":
-                try:
-                    # Capture frame
-                    frame = picam2.capture_array()
+                        # Create bitmap
+                        bitmap_data = camera_server.create_bw_bitmap(frame)
 
-                    # Create bitmap
-                    bitmap_data = camera_server.create_bw_bitmap(frame)
+                        # Send OK response
+                        conn.send(b"OK\n")
 
-                    # Send OK response
-                    conn.send(b"OK\n")
+                        # Send bitmap size (as 4-byte little-endian)
+                        size_bytes = len(bitmap_data).to_bytes(4, "little")
+                        conn.send(size_bytes)
 
-                    # Send bitmap size (as 4-byte little-endian)
-                    size_bytes = len(bitmap_data).to_bytes(4, "little")
-                    conn.send(size_bytes)
+                        # Send bitmap data
+                        conn.send(bitmap_data)
 
-                    # Send bitmap data
-                    conn.send(bitmap_data)
+                        print(f"Sent frame: {len(bitmap_data)} bytes")
 
-                    print(f"Sent frame: {len(bitmap_data)} bytes")
+                    except Exception as e:
+                        print(f"Frame capture error: {e}")
+                        conn.send(b"ERROR\n")
 
-                except Exception as e:
-                    print(f"Frame capture error: {e}")
+                elif command:  # Non-empty command
+                    print(f"Unknown command: '{command}'")
                     conn.send(b"ERROR\n")
+                else:
+                    print("Empty command received")
 
-            else:
-                print(f"Unknown command: {data}")
+            except UnicodeDecodeError as e:
+                print(f"Unicode decode error: {e}")
                 conn.send(b"ERROR\n")
+            except Exception as e:
+                print(f"Command processing error: {e}")
+                break
 
     except Exception as e:
         print(f"Client error: {e}")
