@@ -142,7 +142,7 @@ def create_overlay_camera():
 
     # Configure for RGB output (easier for OpenCV processing)
     config = picam2.create_still_configuration(
-        main={"size": (480, 360), "format": "RGB888"},  # RGB for easier processing
+        main={"size": (240, 320), "format": "RGB888"},  # RGB for easier processing
         buffer_count=2,
     )
 
@@ -254,20 +254,6 @@ def main():
                             gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
                             # Convert back to 3-channel for JPEG encoding but keep grayscale appearance
                             frame = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)
-
-                        # Add a test rectangle to verify drawing works (now in grayscale world)
-                        cv2.rectangle(
-                            frame, (10, 10), (100, 50), (128, 128, 128), 2
-                        )  # Gray test rectangle
-                        cv2.putText(
-                            frame,
-                            "TEST",
-                            (15, 35),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7,
-                            (128, 128, 128),
-                            2,
-                        )
 
                         # Convert frame to JPEG bytes
                         jpeg_bytes = streamer.frame_to_jpeg_bytes(frame)
