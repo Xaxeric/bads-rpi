@@ -67,16 +67,27 @@ def server_info():
 @info_bp.route("/health")
 def health_check():
     """Health check endpoint for monitoring"""
-    camera_server = get_camera_server()
+    try:
+        camera_server = get_camera_server()
 
-    # Simple health check
-    is_healthy = camera_server.picam2 is not None
+        # Simple health check
+        is_healthy = camera_server.picam2 is not None
 
-    response_data = {
-        "status": "healthy" if is_healthy else "unhealthy",
-        "camera_initialized": is_healthy,
-        "timestamp": int(time.time()),
-    }
+        response_data = {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "camera_initialized": is_healthy,
+            "timestamp": int(time.time()),
+        }
 
-    status_code = 200 if is_healthy else 503
-    return jsonify(response_data), status_code
+        status_code = 200 if is_healthy else 503
+        return jsonify(response_data), status_code
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@info_bp.route("/test")
+def test_endpoint():
+    """Simple test endpoint to verify server is working"""
+    return jsonify(
+        {"message": "Server is running", "timestamp": int(time.time()), "status": "ok"}
+    )

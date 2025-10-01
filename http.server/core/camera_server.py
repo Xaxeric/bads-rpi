@@ -50,20 +50,33 @@ class CameraServer:
     def initialize_camera(self):
         """Initialize Picamera2 with ESP32-optimized settings"""
         try:
+            print("Attempting to initialize camera...")
             self.picam2 = Picamera2()
+            print("Picamera2 object created")
 
             # Configure for 320x240 to match ESP32 requirements
             config = self.picam2.create_still_configuration(
                 main={"size": (320, 240), "format": "RGB888"},
                 buffer_count=2,
             )
+            print("Camera configuration created")
 
             self.picam2.configure(config)
+            print("Camera configured")
+
             self.picam2.start()
+            print("Camera started")
+
             time.sleep(1)  # Allow camera to warm up
             print("Camera initialized at 320x240")
+
+            # Test capture to verify camera works
+            test_frame = self.picam2.capture_array()
+            print(f"Test capture successful: {test_frame.shape}")
+
         except Exception as e:
             print(f"Failed to initialize camera: {e}")
+            print(f"Camera error type: {type(e).__name__}")
             self.picam2 = None
 
     def enable_face_detection(self):

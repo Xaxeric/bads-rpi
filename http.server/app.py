@@ -80,7 +80,6 @@ def print_server_info(config):
     print("\nInfo Endpoints:")
     print(f"  Server info:              http://0.0.0.0:{config['port']}/info")
     print(f"  Health check:             http://0.0.0.0:{config['port']}/health")
-    print(f"  Feature status:           http://0.0.0.0:{config['port']}/features")
 
 
 def main():
