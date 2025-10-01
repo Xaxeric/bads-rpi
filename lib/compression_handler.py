@@ -430,10 +430,10 @@ def create_compression_handler(esp32_optimized: bool = True) -> CompressionHandl
     """
     if esp32_optimized:
         # JPEG with good quality/size balance for ESP32
-        return CompressionHandler(CompressionFormat.JPEG, quality=75)
+        return CompressionHandler(CompressionFormat.JPEG, default_quality=75)
     else:
         # Higher quality for general use
-        return CompressionHandler(CompressionFormat.JPEG, quality=90)
+        return CompressionHandler(CompressionFormat.JPEG, default_quality=90)
 
 
 def quick_jpeg_compress(frame: np.ndarray, quality: int = 85) -> Optional[bytes]:
