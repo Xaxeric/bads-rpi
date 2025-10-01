@@ -157,6 +157,43 @@ class CameraServer:
             print(f"Capture error: {e}")
             return None
 
+    def capture_grayscale_jpeg_with_faces(self):
+        """Capture a grayscale JPEG frame with face detection for streaming"""
+        try:
+            with self.lock:
+                # Capture frame
+                frame = self.picam2.capture_array()
+
+                # Convert RGB to BGR
+                bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+                # Always apply face detection for streaming
+                if self.face_detection_enabled:
+                    bgr_frame = self.process_frame_with_faces(bgr_frame)
+
+                # Convert to grayscale using handler if available
+                if self.grayscale_handler:
+                    jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
+                        bgr_frame, quality=80
+                    )
+                    return jpeg_data
+                else:
+                    # Fallback to basic grayscale
+                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
+
+                    encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    success, jpeg_buffer = cv2.imencode(".jpg", gray_3ch, encode_param)
+
+                    if success:
+                        return jpeg_buffer.tobytes()
+                    else:
+                        return None
+
+        except Exception as e:
+            print(f"Grayscale with faces capture error: {e}")
+            return None
+
     def capture_grayscale_jpeg(self):
         """Capture a grayscale JPEG frame using grayscale handler"""
         try:
@@ -325,12 +362,12 @@ def get_frame_compressed():
 
 @app.route("/stream")
 def mjpeg_stream():
-    """MJPEG grayscale stream - for browsers or advanced ESP32 implementations"""
+    """MJPEG grayscale stream with face detection - for browsers or advanced ESP32 implementations"""
 
     def generate():
         while True:
             try:
-                jpeg_data = camera_server.capture_grayscale_jpeg()
+                jpeg_data = camera_server.capture_grayscale_jpeg_with_faces()
                 if jpeg_data:
                     yield (
                         b"--frame\r\n"
@@ -381,14 +418,8 @@ def main():
     print("Resolution: 320x240 JPEG")
     print("ESP32 endpoint: http://your-pi-ip:5000/frame")
 
-    # Default port
+    # Fixed port - no arguments
     port = 5000
-
-    # Parse port argument if provided
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
-            if arg.startswith("--port="):
-                port = int(arg.split("=")[1])
 
     try:
         # Initialize camera
@@ -413,7 +444,7 @@ def main():
         print(f"  Single frame (ESP32):     http://0.0.0.0:{port}/frame")
         print(f"  Grayscale frame (ESP32):  http://0.0.0.0:{port}/frame_gray")
         print(f"  Compressed frame (ESP32): http://0.0.0.0:{port}/frame_compressed")
-        print(f"  MJPEG grayscale stream:   http://0.0.0.0:{port}/stream")
+        print(f"  MJPEG grayscale stream with faces: http://0.0.0.0:{port}/stream")
         print(f"  Server info:              http://0.0.0.0:{port}/info")
 
         # Force garbage collection
