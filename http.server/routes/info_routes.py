@@ -14,14 +14,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
 from camera_server import get_camera_server
 
 # Create Blueprint for info routes
-info_bp = Blueprint('info', __name__)
+info_bp = Blueprint("info", __name__)
 
 
 @info_bp.route("/")
 def index():
     """Basic info page"""
     camera_server = get_camera_server()
-    
+
     return jsonify(
         {
             "server": "Flask Camera Server for ESP32",
@@ -48,7 +48,7 @@ def server_info():
     """Server status and configuration"""
     camera_server = get_camera_server()
     status = camera_server.get_server_status()
-    
+
     return jsonify(
         {
             **status,
@@ -68,42 +68,15 @@ def server_info():
 def health_check():
     """Health check endpoint for monitoring"""
     camera_server = get_camera_server()
-    
+
     # Simple health check
     is_healthy = camera_server.picam2 is not None
-    
+
     response_data = {
         "status": "healthy" if is_healthy else "unhealthy",
         "camera_initialized": is_healthy,
         "timestamp": int(time.time()),
     }
-    
+
     status_code = 200 if is_healthy else 503
     return jsonify(response_data), status_code
-
-
-@info_bp.route("/features")
-def feature_status():
-    """Detailed feature availability status"""
-    camera_server = get_camera_server()
-    
-    return jsonify(
-        {
-            "features": {
-                "face_detection": {
-                    "available": camera_server.face_detector is not None,
-                    "enabled": camera_server.face_detection_enabled,
-                    "detected_faces": len(camera_server.detected_faces),
-                },
-                "grayscale_processing": {
-                    "available": camera_server.grayscale_handler is not None,
-                    "enabled": camera_server.grayscale_enabled,
-                },
-                "advanced_compression": {
-                    "available": camera_server.compression_handler is not None,
-                    "enabled": camera_server.compression_handler is not None,
-                },
-            },
-            "camera": camera_server.get_server_status(),
-        }
-    )

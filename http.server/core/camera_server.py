@@ -34,7 +34,7 @@ class CameraServer:
     Core camera server handling all camera operations
     Follows Single Responsibility Principle - only handles camera functionality
     """
-    
+
     def __init__(self):
         self.picam2 = None
         self.face_detector = None
@@ -49,18 +49,22 @@ class CameraServer:
 
     def initialize_camera(self):
         """Initialize Picamera2 with ESP32-optimized settings"""
-        self.picam2 = Picamera2()
+        try:
+            self.picam2 = Picamera2()
 
-        # Configure for 320x240 to match ESP32 requirements
-        config = self.picam2.create_still_configuration(
-            main={"size": (320, 240), "format": "RGB888"},
-            buffer_count=2,
-        )
+            # Configure for 320x240 to match ESP32 requirements
+            config = self.picam2.create_still_configuration(
+                main={"size": (320, 240), "format": "RGB888"},
+                buffer_count=2,
+            )
 
-        self.picam2.configure(config)
-        self.picam2.start()
-        time.sleep(1)  # Allow camera to warm up
-        print("Camera initialized at 320x240")
+            self.picam2.configure(config)
+            self.picam2.start()
+            time.sleep(1)  # Allow camera to warm up
+            print("Camera initialized at 320x240")
+        except Exception as e:
+            print(f"Failed to initialize camera: {e}")
+            self.picam2 = None
 
     def enable_face_detection(self):
         """Enable face detection if available"""
@@ -130,6 +134,11 @@ class CameraServer:
     def capture_jpeg(self):
         """Capture a single JPEG frame"""
         try:
+            # Check if camera is available
+            if self.picam2 is None:
+                print("Camera not initialized")
+                return None
+
             with self.lock:
                 # Capture frame
                 frame = self.picam2.capture_array()
@@ -161,6 +170,11 @@ class CameraServer:
     def capture_grayscale_jpeg(self):
         """Capture a grayscale JPEG frame using grayscale handler"""
         try:
+            # Check if camera is available
+            if self.picam2 is None:
+                print("Camera not initialized")
+                return None
+
             with self.lock:
                 # Capture frame
                 frame = self.picam2.capture_array()
@@ -198,6 +212,11 @@ class CameraServer:
     def capture_compressed_jpeg(self):
         """Capture a highly compressed JPEG frame for ESP32"""
         try:
+            # Check if camera is available
+            if self.picam2 is None:
+                print("Camera not initialized")
+                return None
+
             with self.lock:
                 # Capture frame
                 frame = self.picam2.capture_array()
@@ -253,6 +272,7 @@ class CameraServer:
 
 # Global camera server instance - Singleton pattern
 _camera_server_instance = None
+
 
 def get_camera_server():
     """Get the global camera server instance (Singleton pattern)"""
