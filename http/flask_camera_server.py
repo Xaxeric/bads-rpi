@@ -261,108 +261,6 @@ class CameraServer:
             print(f"Grayscale with faces capture error: {e}")
             return None
 
-    def capture_grayscale_jpeg(self):
-        """Capture a grayscale JPEG frame using grayscale handler"""
-        try:
-            with self.lock:
-                # Capture frame
-                frame = self.picam2.capture_array()
-
-                # Convert RGB to BGR
-                bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-                # Add face detection if enabled
-                if self.face_detection_enabled:
-                    bgr_frame = self.process_frame_with_faces(bgr_frame)
-
-                # Convert to grayscale using handler if available
-                if self.grayscale_handler:
-                    jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
-                        bgr_frame, quality=80
-                    )
-                else:
-                    # Fallback to basic grayscale
-                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
-                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-
-                    encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    success, jpeg_buffer = cv2.imencode(".jpg", gray_3ch, encode_param)
-
-                    if success:
-                        jpeg_data = jpeg_buffer.tobytes()
-                    else:
-                        jpeg_data = None
-
-                # Send frame to database server
-                if jpeg_data:
-                    # Send to database in background thread to avoid blocking
-                    threading.Thread(
-                        target=self.send_frame_to_database,
-                        args=(jpeg_data,),
-                        daemon=True,
-                    ).start()
-
-                return jpeg_data
-
-        except Exception as e:
-            print(f"Grayscale capture error: {e}")
-            return None
-
-    def capture_compressed_jpeg(self):
-        """Capture a highly compressed JPEG frame for ESP32"""
-        try:
-            with self.lock:
-                # Capture frame
-                frame = self.picam2.capture_array()
-
-                # Convert RGB to BGR
-                bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-                # Add face detection if enabled
-                if self.face_detection_enabled:
-                    bgr_frame = self.process_frame_with_faces(bgr_frame)
-
-                # Use compression handler if available
-                if self.compression_handler:
-                    # Target 8KB for ESP32 with limited memory
-                    compressed_data = self.compression_handler.compress_for_esp32(
-                        bgr_frame, target_size_kb=8
-                    )
-                else:
-                    # Fallback to basic high compression
-                    encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
-                    success, jpeg_buffer = cv2.imencode(".jpg", bgr_frame, encode_param)
-
-                    if success:
-                        compressed_data = jpeg_buffer.tobytes()
-                    else:
-                        compressed_data = None
-
-                # Send grayscale version to database
-                if compressed_data:
-                    # Convert to grayscale for database
-                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
-                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-
-                    gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    gray_success, gray_jpeg_buffer = cv2.imencode(
-                        ".jpg", gray_3ch, gray_encode_param
-                    )
-
-                    if gray_success:
-                        gray_jpeg_data = gray_jpeg_buffer.tobytes()
-                        # Send grayscale version to database in background
-                        threading.Thread(
-                            target=self.send_frame_to_database,
-                            args=(gray_jpeg_data,),
-                            daemon=True,
-                        ).start()
-
-                return compressed_data
-
-        except Exception as e:
-            print(f"Compressed capture error: {e}")
-            return None
 
     def cleanup(self):
         """Clean up camera resources"""
@@ -386,8 +284,6 @@ def index():
             "resolution": "320x240",
             "endpoints": {
                 "single_frame": "/frame",
-                "grayscale_frame": "/frame_gray",
-                "compressed_frame": "/frame_compressed",
                 "mjpeg_stream": "/stream",
                 "server_info": "/info",
             },
@@ -416,46 +312,6 @@ def get_frame():
         )
     else:
         return "Error capturing frame", 500
-
-
-@app.route("/frame_gray")
-def get_frame_grayscale():
-    """Get a single grayscale JPEG frame - optimized for ESP32"""
-    jpeg_data = camera_server.capture_grayscale_jpeg()
-
-    if jpeg_data:
-        return Response(
-            jpeg_data,
-            mimetype="image/jpeg",
-            headers={
-                "Content-Length": str(len(jpeg_data)),
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
-    else:
-        return "Error capturing grayscale frame", 500
-
-
-@app.route("/frame_compressed")
-def get_frame_compressed():
-    """Get a highly compressed frame for ESP32 with limited memory"""
-    jpeg_data = camera_server.capture_compressed_jpeg()
-
-    if jpeg_data:
-        return Response(
-            jpeg_data,
-            mimetype="image/jpeg",
-            headers={
-                "Content-Length": str(len(jpeg_data)),
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
-    else:
-        return "Error capturing compressed frame", 500
 
 
 @app.route("/stream")
@@ -503,8 +359,6 @@ def server_info():
             "format": "JPEG",
             "usage": {
                 "esp32_recommended": "GET /frame",
-                "esp32_grayscale": "GET /frame_gray",
-                "esp32_compressed": "GET /frame_compressed",
                 "browser_stream": "GET /stream",
             },
         }
@@ -540,8 +394,6 @@ def main():
         )
         print("\nEndpoints:")
         print(f"  Single frame (ESP32):     http://0.0.0.0:{port}/frame")
-        print(f"  Grayscale frame (ESP32):  http://0.0.0.0:{port}/frame_gray")
-        print(f"  Compressed frame (ESP32): http://0.0.0.0:{port}/frame_compressed")
         print(f"  MJPEG grayscale stream with faces: http://0.0.0.0:{port}/stream")
         print(f"  Server info:              http://0.0.0.0:{port}/info")
         print(f"\nDatabase server: {DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}")
