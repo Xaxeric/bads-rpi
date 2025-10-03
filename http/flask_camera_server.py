@@ -163,52 +163,108 @@ class CameraServer:
 
         return frame
 
+    def process_frame_with_faces_on_grayscale(self, gray_single_channel, gray_frame_bgr):
+        """Optimized face detection on grayscale image"""
+        current_time = time.time()
+
+        # Run face detection periodically on grayscale image (more efficient)
+        if (
+            self.face_detector
+            and (current_time - self.last_detection_time) > self.detection_interval
+        ):
+            # Use grayscale image directly for face detection
+            faces = self.face_detector.detect_faces(gray_single_channel)
+
+            if len(faces) > 0:
+                # Keep only the largest face for better performance
+                largest_face = max(faces, key=lambda face: face[2] * face[3])
+                self.detected_faces = [largest_face]
+                print(f"Face detected: {largest_face}")
+            else:
+                self.detected_faces = []
+
+            self.last_detection_time = current_time
+
+        # Draw face boxes on the 3-channel grayscale image
+        if len(self.detected_faces) > 0:
+            for x, y, w, h in self.detected_faces:
+                cv2.rectangle(gray_frame_bgr, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(
+                    gray_frame_bgr,
+                    "FACE",
+                    (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
+                )
+
+        return gray_frame_bgr
+
     def capture_jpeg(self):
-        """Capture a single JPEG frame"""
+        """Capture a single JPEG frame with optimized processing flow"""
         try:
             with self.lock:
-                # Capture frame
+                # Step 1: Capture frame
                 frame = self.picam2.capture_array()
 
-                # Add face detection if enabled
-                if self.face_detection_enabled:
-                    frame = self.process_frame_with_faces(frame)
-
-                # Convert RGB to BGR for JPEG encoding
+                # Step 2: Convert RGB to BGR for OpenCV processing
                 bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                # Encode to JPEG with optimization for ESP32
-                encode_param = [
-                    cv2.IMWRITE_JPEG_QUALITY,
-                    85,
-                ]  # Good quality vs size balance
-                success, jpeg_buffer = cv2.imencode(".jpg", bgr_frame, encode_param)
-
-                if success:
-                    jpeg_data = jpeg_buffer.tobytes()
-
-                    # Convert to grayscale and send to database
-                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
-                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-
-                    gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    gray_success, gray_jpeg_buffer = cv2.imencode(
-                        ".jpg", gray_3ch, gray_encode_param
-                    )
-
-                    if gray_success:
-                        gray_jpeg_data = gray_jpeg_buffer.tobytes()
-                        # Send grayscale version to database in background
-                        threading.Thread(
-                            target=self.send_frame_to_database,
-                            args=(gray_jpeg_data,),
-                            daemon=True,
-                        ).start()
-
-                    return jpeg_data
+                # Step 3: Convert to grayscale using grayscale handler
+                if self.grayscale_handler:
+                    # Use advanced grayscale processing
+                    gray_frame_bgr = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                    gray_frame_bgr = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_GRAY2BGR)
                 else:
-                    print("JPEG encoding failed")
-                    return None
+                    # Fallback to basic grayscale
+                    gray_frame_bgr = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                    gray_frame_bgr = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_GRAY2BGR)
+
+                # Step 4: Send grayscale frame to database in background thread
+                gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
+                gray_success, gray_jpeg_buffer = cv2.imencode(
+                    ".jpg", gray_frame_bgr, gray_encode_param
+                )
+                
+                if gray_success:
+                    gray_jpeg_data = gray_jpeg_buffer.tobytes()
+                    # Send to database in background thread to avoid blocking
+                    threading.Thread(
+                        target=self.send_frame_to_database,
+                        args=(gray_jpeg_data,),
+                        daemon=True,
+                    ).start()
+
+                # Step 5: Add face detection to grayscale image (more efficient)
+                if self.face_detection_enabled:
+                    # Apply face detection on the grayscale image
+                    gray_single_channel = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_BGR2GRAY)
+                    gray_frame_bgr = self.process_frame_with_faces_on_grayscale(gray_single_channel, gray_frame_bgr)
+
+                # Step 6: Compress using compression handler 
+                if self.compression_handler:
+                    # Use advanced compression handler
+                    compressed_data = self.compression_handler.compress_image(
+                        gray_frame_bgr, quality=85
+                    )
+                    if compressed_data:
+                        return compressed_data
+                    else:
+                        # Fallback to basic encoding if compression handler fails
+                        encode_param = [cv2.IMWRITE_JPEG_QUALITY, 85]
+                        success, jpeg_buffer = cv2.imencode(".jpg", gray_frame_bgr, encode_param)
+                        return jpeg_buffer.tobytes() if success else None
+                else:
+                    # Use basic JPEG encoding
+                    encode_param = [cv2.IMWRITE_JPEG_QUALITY, 85]
+                    success, jpeg_buffer = cv2.imencode(".jpg", gray_frame_bgr, encode_param)
+                    
+                    if success:
+                        return jpeg_buffer.tobytes()
+                    else:
+                        print("JPEG encoding failed")
+                        return None
 
         except Exception as e:
             print(f"Capture error: {e}")
@@ -224,20 +280,21 @@ class CameraServer:
                 # Convert RGB to BGR
                 bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                # Always apply face detection for streaming
-                if self.face_detection_enabled:
-                    bgr_frame = self.process_frame_with_faces(bgr_frame)
+                # Convert to grayscale first (more efficient)
+                gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
 
-                # Convert to grayscale using handler if available
+                # Apply face detection on grayscale (more efficient)
+                if self.face_detection_enabled:
+                    gray_3ch = self.process_frame_with_faces_on_grayscale(gray_frame, gray_3ch)
+
+                # Convert to JPEG using handler if available
                 if self.grayscale_handler:
                     jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
-                        bgr_frame, quality=80
+                        gray_3ch, quality=80
                     )
                 else:
-                    # Fallback to basic grayscale
-                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
-                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-
+                    # Fallback to basic grayscale encoding
                     encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
                     success, jpeg_buffer = cv2.imencode(".jpg", gray_3ch, encode_param)
 
