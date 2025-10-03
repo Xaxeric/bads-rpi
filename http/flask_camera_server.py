@@ -8,10 +8,12 @@ import os
 import sys
 import time
 import cv2
+import requests
 from flask import Flask, Response, jsonify
 from picamera2 import Picamera2
 import threading
 import gc
+import base64
 
 # Add lib directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
@@ -32,6 +34,11 @@ except ImportError as e:
 
 app = Flask(__name__)
 
+# Database server configuration
+DATABASE_SERVER_IP = "192.168.18.11"
+DATABASE_SERVER_PORT = 3000
+DATABASE_URL = f"http://{DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}/api/capture"
+
 
 class CameraServer:
     def __init__(self):
@@ -45,6 +52,40 @@ class CameraServer:
         self.face_detection_enabled = False
         self.grayscale_enabled = False
         self.lock = threading.Lock()
+
+    def send_frame_to_database(self, jpeg_data):
+        """Send grayscale frame data to database server"""
+        try:
+            # Convert JPEG bytes to base64 for JSON transmission
+            frame_b64 = base64.b64encode(jpeg_data).decode('utf-8')
+            
+            payload = {
+                'timestamp': time.time(),
+                'frame_data': frame_b64,
+                'format': 'jpeg',
+                'grayscale': True,
+                'resolution': '320x240'
+            }
+            
+            # Send to database server with timeout
+            response = requests.post(
+                DATABASE_URL, 
+                json=payload, 
+                timeout=5,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if response.status_code == 200:
+                print("Frame sent to database successfully")
+            else:
+                print(f"Database server responded with status: {response.status_code}")
+                
+        except requests.exceptions.Timeout:
+            print("Timeout sending frame to database server")
+        except requests.exceptions.ConnectionError:
+            print(f"Could not connect to database server at {DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}")
+        except Exception as e:
+            print(f"Error sending frame to database: {e}")
 
     def initialize_camera(self):
         """Initialize Picamera2 with ESP32-optimized settings"""
@@ -148,7 +189,25 @@ class CameraServer:
                 success, jpeg_buffer = cv2.imencode(".jpg", bgr_frame, encode_param)
 
                 if success:
-                    return jpeg_buffer.tobytes()
+                    jpeg_data = jpeg_buffer.tobytes()
+                    
+                    # Convert to grayscale and send to database
+                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
+                    
+                    gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    gray_success, gray_jpeg_buffer = cv2.imencode(".jpg", gray_3ch, gray_encode_param)
+                    
+                    if gray_success:
+                        gray_jpeg_data = gray_jpeg_buffer.tobytes()
+                        # Send grayscale version to database in background
+                        threading.Thread(
+                            target=self.send_frame_to_database, 
+                            args=(gray_jpeg_data,), 
+                            daemon=True
+                        ).start()
+                    
+                    return jpeg_data
                 else:
                     print("JPEG encoding failed")
                     return None
@@ -176,7 +235,6 @@ class CameraServer:
                     jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
                         bgr_frame, quality=80
                     )
-                    return jpeg_data
                 else:
                     # Fallback to basic grayscale
                     gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
@@ -186,9 +244,20 @@ class CameraServer:
                     success, jpeg_buffer = cv2.imencode(".jpg", gray_3ch, encode_param)
 
                     if success:
-                        return jpeg_buffer.tobytes()
+                        jpeg_data = jpeg_buffer.tobytes()
                     else:
-                        return None
+                        jpeg_data = None
+
+                # Send frame to database server
+                if jpeg_data:
+                    # Send to database in background thread to avoid blocking
+                    threading.Thread(
+                        target=self.send_frame_to_database, 
+                        args=(jpeg_data,), 
+                        daemon=True
+                    ).start()
+
+                return jpeg_data
 
         except Exception as e:
             print(f"Grayscale with faces capture error: {e}")
@@ -213,7 +282,6 @@ class CameraServer:
                     jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
                         bgr_frame, quality=80
                     )
-                    return jpeg_data
                 else:
                     # Fallback to basic grayscale
                     gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
@@ -223,9 +291,20 @@ class CameraServer:
                     success, jpeg_buffer = cv2.imencode(".jpg", gray_3ch, encode_param)
 
                     if success:
-                        return jpeg_buffer.tobytes()
+                        jpeg_data = jpeg_buffer.tobytes()
                     else:
-                        return None
+                        jpeg_data = None
+
+                # Send frame to database server
+                if jpeg_data:
+                    # Send to database in background thread to avoid blocking
+                    threading.Thread(
+                        target=self.send_frame_to_database, 
+                        args=(jpeg_data,), 
+                        daemon=True
+                    ).start()
+
+                return jpeg_data
 
         except Exception as e:
             print(f"Grayscale capture error: {e}")
@@ -251,16 +330,35 @@ class CameraServer:
                     compressed_data = self.compression_handler.compress_for_esp32(
                         bgr_frame, target_size_kb=8
                     )
-                    return compressed_data
                 else:
                     # Fallback to basic high compression
                     encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
                     success, jpeg_buffer = cv2.imencode(".jpg", bgr_frame, encode_param)
 
                     if success:
-                        return jpeg_buffer.tobytes()
+                        compressed_data = jpeg_buffer.tobytes()
                     else:
-                        return None
+                        compressed_data = None
+
+                # Send grayscale version to database
+                if compressed_data:
+                    # Convert to grayscale for database
+                    gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+                    gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
+                    
+                    gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    gray_success, gray_jpeg_buffer = cv2.imencode(".jpg", gray_3ch, gray_encode_param)
+                    
+                    if gray_success:
+                        gray_jpeg_data = gray_jpeg_buffer.tobytes()
+                        # Send grayscale version to database in background
+                        threading.Thread(
+                            target=self.send_frame_to_database, 
+                            args=(gray_jpeg_data,), 
+                            daemon=True
+                        ).start()
+
+                return compressed_data
 
         except Exception as e:
             print(f"Compressed capture error: {e}")
@@ -446,6 +544,8 @@ def main():
         print(f"  Compressed frame (ESP32): http://0.0.0.0:{port}/frame_compressed")
         print(f"  MJPEG grayscale stream with faces: http://0.0.0.0:{port}/stream")
         print(f"  Server info:              http://0.0.0.0:{port}/info")
+        print(f"\nDatabase server: {DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}")
+        print("All captured frames will be sent to database after grayscaling")
 
         # Force garbage collection
         gc.collect()
