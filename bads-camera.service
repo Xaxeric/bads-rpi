@@ -6,7 +6,8 @@ Wants=network.target
 [Service]
 Type=simple
 User=pi
-Group=pi
+Group=video
+SupplementaryGroups=video
 WorkingDirectory=/opt/bads-rpi
 ExecStart=/usr/bin/python3 /opt/bads-rpi/http/flask_camera_server.py
 Restart=always
@@ -16,16 +17,22 @@ StandardError=journal
 
 # Environment variables
 Environment=PYTHONPATH=/opt/bads-rpi
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 
 # Resource limits for Pi Zero 2W
 LimitNOFILE=1024
 MemoryMax=256M
 
-# Security settings
+# Security settings - Modified for camera access
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
+# ProtectSystem=strict  # Disabled for camera device access
 ReadWritePaths=/opt/bads-rpi
+# Allow access to camera devices
+DeviceAllow=/dev/video0 rw
+DeviceAllow=/dev/video1 rw
+DevicePolicy=closed
 
 [Install]
 WantedBy=multi-user.target
