@@ -172,8 +172,8 @@ class CameraServer:
             self.face_detector
             and (current_time - self.last_detection_time) > self.detection_interval
         ):
-            # Use grayscale image directly for face detection
-            faces = self.face_detector.detect_faces(gray_single_channel)
+            # Face detector expects BGR format, so use the 3-channel grayscale
+            faces = self.face_detector.detect_faces(gray_frame_bgr)
 
             if len(faces) > 0:
                 # Keep only the largest face for better performance
