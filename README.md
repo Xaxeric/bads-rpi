@@ -135,3 +135,31 @@ Edit `capture_stream.py`:
 ### Client
 - Python 3
 - Standard Python libraries (socket, threading, queue)
+
+## Systemd Service (Auto-start on boot)
+
+For automatic startup of the Flask camera server, use the included Makefile:
+
+```bash
+# Quick system-wide setup (move project + install + start)
+make setup
+
+# Or user-level setup (no sudo required)
+make setup-user
+
+# Or step by step:
+make move-project    # Move to /opt/bads-rpi
+make install         # Install systemd service (system-wide)
+# OR
+make install-user    # Install systemd service (user-level)
+make start           # Start the service
+
+# View all commands:
+make help
+```
+
+**Installation Options:**
+- **System-wide**: Starts at boot time (recommended for headless Pi)
+- **User-level**: Starts when pi user logs in (no sudo required)
+
+See `SERVICE_README.md` for detailed systemd service documentation.
