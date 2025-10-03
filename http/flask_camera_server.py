@@ -13,7 +13,6 @@ from flask import Flask, Response, jsonify
 from picamera2 import Picamera2
 import threading
 import gc
-import base64
 
 # Add lib directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
@@ -56,34 +55,31 @@ class CameraServer:
     def send_frame_to_database(self, jpeg_data):
         """Send grayscale frame data to database server"""
         try:
-            # Convert JPEG bytes to base64 for JSON transmission
-            frame_b64 = base64.b64encode(jpeg_data).decode('utf-8')
-            
-            payload = {
-                'timestamp': time.time(),
-                'frame_data': frame_b64,
-                'format': 'jpeg',
-                'grayscale': True,
-                'resolution': '320x240'
+            # Prepare the file data for multipart/form-data
+            files = {"image": ("frame.jpg", jpeg_data, "image/jpeg")}
+
+            # Optional: Add additional data as form fields
+            data = {
+                "timestamp": str(time.time()),
+                "format": "jpeg",
+                "grayscale": "true",
+                "resolution": "320x240",
             }
-            
-            # Send to database server with timeout
-            response = requests.post(
-                DATABASE_URL, 
-                json=payload, 
-                timeout=5,
-                headers={'Content-Type': 'application/json'}
-            )
-            
+
+            # Send to database server with timeout using form-data
+            response = requests.post(DATABASE_URL, files=files, data=data, timeout=5)
+
             if response.status_code == 200:
                 print("Frame sent to database successfully")
             else:
                 print(f"Database server responded with status: {response.status_code}")
-                
+
         except requests.exceptions.Timeout:
             print("Timeout sending frame to database server")
         except requests.exceptions.ConnectionError:
-            print(f"Could not connect to database server at {DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}")
+            print(
+                f"Could not connect to database server at {DATABASE_SERVER_IP}:{DATABASE_SERVER_PORT}"
+            )
         except Exception as e:
             print(f"Error sending frame to database: {e}")
 
@@ -190,23 +186,25 @@ class CameraServer:
 
                 if success:
                     jpeg_data = jpeg_buffer.tobytes()
-                    
+
                     # Convert to grayscale and send to database
                     gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
                     gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-                    
+
                     gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    gray_success, gray_jpeg_buffer = cv2.imencode(".jpg", gray_3ch, gray_encode_param)
-                    
+                    gray_success, gray_jpeg_buffer = cv2.imencode(
+                        ".jpg", gray_3ch, gray_encode_param
+                    )
+
                     if gray_success:
                         gray_jpeg_data = gray_jpeg_buffer.tobytes()
                         # Send grayscale version to database in background
                         threading.Thread(
-                            target=self.send_frame_to_database, 
-                            args=(gray_jpeg_data,), 
-                            daemon=True
+                            target=self.send_frame_to_database,
+                            args=(gray_jpeg_data,),
+                            daemon=True,
                         ).start()
-                    
+
                     return jpeg_data
                 else:
                     print("JPEG encoding failed")
@@ -252,9 +250,9 @@ class CameraServer:
                 if jpeg_data:
                     # Send to database in background thread to avoid blocking
                     threading.Thread(
-                        target=self.send_frame_to_database, 
-                        args=(jpeg_data,), 
-                        daemon=True
+                        target=self.send_frame_to_database,
+                        args=(jpeg_data,),
+                        daemon=True,
                     ).start()
 
                 return jpeg_data
@@ -299,9 +297,9 @@ class CameraServer:
                 if jpeg_data:
                     # Send to database in background thread to avoid blocking
                     threading.Thread(
-                        target=self.send_frame_to_database, 
-                        args=(jpeg_data,), 
-                        daemon=True
+                        target=self.send_frame_to_database,
+                        args=(jpeg_data,),
+                        daemon=True,
                     ).start()
 
                 return jpeg_data
@@ -345,17 +343,19 @@ class CameraServer:
                     # Convert to grayscale for database
                     gray_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
                     gray_3ch = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
-                    
+
                     gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    gray_success, gray_jpeg_buffer = cv2.imencode(".jpg", gray_3ch, gray_encode_param)
-                    
+                    gray_success, gray_jpeg_buffer = cv2.imencode(
+                        ".jpg", gray_3ch, gray_encode_param
+                    )
+
                     if gray_success:
                         gray_jpeg_data = gray_jpeg_buffer.tobytes()
                         # Send grayscale version to database in background
                         threading.Thread(
-                            target=self.send_frame_to_database, 
-                            args=(gray_jpeg_data,), 
-                            daemon=True
+                            target=self.send_frame_to_database,
+                            args=(gray_jpeg_data,),
+                            daemon=True,
                         ).start()
 
                 return compressed_data
