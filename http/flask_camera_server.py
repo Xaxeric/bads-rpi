@@ -211,43 +211,49 @@ class CameraServer:
                 # Step 2: Convert RGB to BGR for OpenCV processing
                 bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                # Step 3: Convert to grayscale using grayscale handler
+                # Step 3: Convert to grayscale and send to database using grayscale handler
                 if self.grayscale_handler:
-                    # Use advanced grayscale processing
+                    # Use grayscale handler for one-step conversion + JPEG encoding
+                    gray_jpeg_data = self.grayscale_handler.get_grayscale_jpeg(bgr_frame, quality=80)
+                    
+                    if gray_jpeg_data:
+                        # Send to database in background thread
+                        threading.Thread(
+                            target=self.send_frame_to_database,
+                            args=(gray_jpeg_data,),
+                            daemon=True,
+                        ).start()
+                    
+                    # Get grayscale 3-channel frame for face detection
                     gray_frame_bgr = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
                     gray_frame_bgr = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_GRAY2BGR)
                 else:
-                    # Fallback to basic grayscale
+                    # Fallback to manual grayscale conversion
                     gray_frame_bgr = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
                     gray_frame_bgr = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_GRAY2BGR)
+                    
+                    # Manual JPEG encoding for database
+                    gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    gray_success, gray_jpeg_buffer = cv2.imencode(".jpg", gray_frame_bgr, gray_encode_param)
+                    
+                    if gray_success:
+                        gray_jpeg_data = gray_jpeg_buffer.tobytes()
+                        threading.Thread(
+                            target=self.send_frame_to_database,
+                            args=(gray_jpeg_data,),
+                            daemon=True,
+                        ).start()
 
-                # Step 4: Send grayscale frame to database in background thread
-                gray_encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                gray_success, gray_jpeg_buffer = cv2.imencode(
-                    ".jpg", gray_frame_bgr, gray_encode_param
-                )
-                
-                if gray_success:
-                    gray_jpeg_data = gray_jpeg_buffer.tobytes()
-                    # Send to database in background thread to avoid blocking
-                    threading.Thread(
-                        target=self.send_frame_to_database,
-                        args=(gray_jpeg_data,),
-                        daemon=True,
-                    ).start()
-
-                # Step 5: Add face detection to grayscale image (more efficient)
+                # Step 4: Add face detection to grayscale image (more efficient)
                 if self.face_detection_enabled:
                     # Apply face detection on the grayscale image
                     gray_single_channel = cv2.cvtColor(gray_frame_bgr, cv2.COLOR_BGR2GRAY)
                     gray_frame_bgr = self.process_frame_with_faces_on_grayscale(gray_single_channel, gray_frame_bgr)
 
-                # Step 6: Compress using compression handler 
+                # Step 5: Compress using compression handler 
                 if self.compression_handler:
-                    # Use advanced compression handler
-                    compressed_data = self.compression_handler.compress_image(
-                        gray_frame_bgr, quality=85
-                    )
+                    # Use simplified compression handler
+                    compressed_data = self.compression_handler.compress_image(gray_frame_bgr, quality=85)
                     if compressed_data:
                         return compressed_data
                     else:
@@ -288,11 +294,9 @@ class CameraServer:
                 if self.face_detection_enabled:
                     gray_3ch = self.process_frame_with_faces_on_grayscale(gray_frame, gray_3ch)
 
-                # Convert to JPEG using handler if available
+                # Convert to JPEG using simplified grayscale handler
                 if self.grayscale_handler:
-                    jpeg_data = self.grayscale_handler.get_grayscale_jpeg(
-                        gray_3ch, quality=80
-                    )
+                    jpeg_data = self.grayscale_handler.get_grayscale_jpeg(gray_3ch, quality=80)
                 else:
                     # Fallback to basic grayscale encoding
                     encode_param = [cv2.IMWRITE_JPEG_QUALITY, 80]

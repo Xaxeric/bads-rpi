@@ -4,7 +4,7 @@ Face Detection Library for Raspberry Pi streaming
 Lightweight OpenCV-based face detection with memory optimization
 """
 
-import cv2 # pyright: ignore[reportMissingImports]
+import cv2  # pyright: ignore[reportMissingImports]
 import time
 
 
@@ -13,13 +13,15 @@ class FaceDetector:
         self,
         detection_interval=1.0,  # Detect faces every 1 second (not every frame)
         min_face_size=(30, 30),  # Minimum face size for Pi Zero performance
-        scale_factor=1.1,  # Conservative scale factor
-        min_neighbors=3,
-    ):  # Lower neighbors for faster detection
+        scale_factor=1.05,  # More precise scale factor for accuracy
+        min_neighbors=4,  # Higher neighbors for better accuracy
+        max_detection_size=(240, 180),  # Larger processing size for accuracy
+    ):
         self.detection_interval = detection_interval
         self.min_face_size = min_face_size
         self.scale_factor = scale_factor
         self.min_neighbors = min_neighbors
+        self.max_detection_size = max_detection_size
 
         # Face detection state
         self.faces_detected = []
@@ -32,7 +34,7 @@ class FaceDetector:
         self._load_cascade()
 
         print(
-            f"Face detector initialized: interval={detection_interval}s, min_size={min_face_size}"
+            f"Face detector initialized: interval={detection_interval}s, min_size={min_face_size}, max_size={max_detection_size}"
         )
 
     def _load_cascade(self):
@@ -115,41 +117,76 @@ class FaceDetector:
             # Convert to grayscale for faster processing
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # Resize frame for faster processing (Pi Zero optimization)
+            # Apply histogram equalization for better contrast and accuracy
+            gray = cv2.equalizeHist(gray)
+
+            # Intelligent resizing for better accuracy vs performance balance
             height, width = gray.shape
-            if width > 320:
-                scale = 320.0 / width
-                new_width = 320
+            max_width, max_height = self.max_detection_size
+
+            if width > max_width or height > max_height:
+                # Scale to fit within max detection size while maintaining aspect ratio
+                scale_w = max_width / width
+                scale_h = max_height / height
+                scale = min(scale_w, scale_h)
+
+                new_width = int(width * scale)
                 new_height = int(height * scale)
-                gray_small = cv2.resize(gray, (new_width, new_height))
+                gray_small = cv2.resize(
+                    gray, (new_width, new_height), interpolation=cv2.INTER_AREA
+                )
             else:
                 gray_small = gray
                 scale = 1.0
 
-            # Detect faces
+            # More accurate face detection with optimized parameters
             faces = self.face_cascade.detectMultiScale(
                 gray_small,
-                scaleFactor=self.scale_factor,
-                minNeighbors=self.min_neighbors,
-                minSize=self.min_face_size,
-                flags=cv2.CASCADE_DO_CANNY_PRUNING,  # Optimization flag
+                scaleFactor=self.scale_factor,  # Smaller steps for more precision
+                minNeighbors=self.min_neighbors,  # Higher threshold for accuracy
+                minSize=(
+                    int(self.min_face_size[0] * scale),
+                    int(self.min_face_size[1] * scale),
+                ),
+                maxSize=(
+                    int(min(new_width, new_height) * 0.8),
+                    int(min(new_width, new_height) * 0.8),
+                ),
+                flags=cv2.CASCADE_DO_CANNY_PRUNING
+                | cv2.CASCADE_SCALE_IMAGE,  # Accuracy + performance flags
             )
 
-            # Scale face coordinates back to original size
-            if scale != 1.0:
-                faces = [
-                    (int(x / scale), int(y / scale), int(w / scale), int(h / scale))
-                    for (x, y, w, h) in faces
-                ]
+            # Filter and validate detected faces for better accuracy
+            validated_faces = []
+            for x, y, w, h in faces:
+                # Scale coordinates back to original size
+                if scale != 1.0:
+                    x, y, w, h = (
+                        int(x / scale),
+                        int(y / scale),
+                        int(w / scale),
+                        int(h / scale),
+                    )
 
-            # Update state
-            self.faces_detected = faces
+                # Validate face dimensions (aspect ratio check)
+                aspect_ratio = w / h
+                if 0.7 <= aspect_ratio <= 1.4:  # Reasonable face aspect ratio
+                    # Ensure face is not too small or too large
+                    face_area = w * h
+                    frame_area = width * height
+                    relative_size = face_area / frame_area
+
+                    if 0.01 <= relative_size <= 0.5:  # Face should be 1-50% of frame
+                        validated_faces.append((x, y, w, h))
+
+            # Update state with validated faces
+            self.faces_detected = validated_faces
             self.last_detection_time = time.time()
 
             # Update statistics
             processing_time = (self.last_detection_time - start_time) * 1000
             self.stats["total_detections"] += 1
-            self.stats["faces_found"] += len(faces)
+            self.stats["faces_found"] += len(validated_faces)
 
             # Running average of processing time
             if self.stats["avg_processing_time"] == 0:
@@ -159,10 +196,12 @@ class FaceDetector:
                     self.stats["avg_processing_time"] * 0.8 + processing_time * 0.2
                 )
 
-            if len(faces) > 0:
-                print(f"Detected {len(faces)} face(s) in {processing_time:.1f}ms")
+            if len(validated_faces) > 0:
+                print(
+                    f"Detected {len(validated_faces)} face(s) in {processing_time:.1f}ms"
+                )
 
-            return faces
+            return validated_faces
 
         except Exception as e:
             print(f"Face detection error: {e}")
@@ -257,17 +296,19 @@ def create_face_detector(lightweight=True):
     """
     if lightweight:
         return FaceDetector(
-            detection_interval=2.0,  # Every 2 seconds for Pi Zero
-            min_face_size=(20, 20),  # Smaller faces for low res
-            scale_factor=1.2,  # Faster detection
-            min_neighbors=2,  # Less strict matching
+            detection_interval=1.5,  # Balanced frequency for accuracy
+            min_face_size=(25, 25),  # Smaller faces for better detection
+            scale_factor=1.08,  # More precise scaling for accuracy
+            min_neighbors=3,  # Balanced accuracy vs false positives
+            max_detection_size=(200, 150),  # Larger processing for better accuracy
         )
     else:
         return FaceDetector(
             detection_interval=0.5,  # Every 500ms for faster Pi
             min_face_size=(30, 30),
-            scale_factor=1.1,
-            min_neighbors=3,
+            scale_factor=1.05,  # Very precise for maximum accuracy
+            min_neighbors=4,  # Higher threshold for accuracy
+            max_detection_size=(240, 180),  # Even larger processing size
         )
 
 
